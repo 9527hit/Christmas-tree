@@ -351,20 +351,20 @@
         }
 
         function setupLights() {
-            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            const ambient = new THREE.AmbientLight(0xffffff, 0.3);
             scene.add(ambient);
 
-            candleLight = new THREE.PointLight(0xffaa00, 2.0, 40);
+            candleLight = new THREE.PointLight(0xffaa00, 1.5, 35);
             candleLight.position.set(0, 7, 0);
             mainGroup.add(candleLight);
 
-            const spotPink = new THREE.SpotLight(0xff3366, 1200);
+            const spotPink = new THREE.SpotLight(0xff3366, 800);
             spotPink.position.set(30, 40, 40);
             spotPink.angle = 0.6;
             spotPink.penumbra = 0.5;
             scene.add(spotPink);
 
-            const spotWarm = new THREE.SpotLight(0xffddaa, 800);
+            const spotWarm = new THREE.SpotLight(0xffddaa, 500);
             spotWarm.position.set(-30, 20, -30);
             scene.add(spotWarm);
         }
@@ -372,9 +372,9 @@
         function setupPostProcessing() {
             const renderScene = new RenderPass(scene, camera);
             const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-            bloomPass.threshold = 0.15; 
-            bloomPass.strength = 1.2; 
-            bloomPass.radius = 0.6;
+            bloomPass.threshold = 0.3; 
+            bloomPass.strength = 0.6; 
+            bloomPass.radius = 0.4;
 
             composer = new EffectComposer(renderer);
             composer.addPass(renderScene);
@@ -650,9 +650,9 @@
             const mat = new THREE.MeshStandardMaterial({ 
                 color: 0xffccdd, 
                 emissive: 0xff99cc,
-                emissiveIntensity: 1.0,
+                emissiveIntensity: 0.4,
                 transparent: true, 
-                opacity: 0.8,
+                opacity: 0.6,
                 roughness: 0.1,
                 metalness: 0.8
             });
