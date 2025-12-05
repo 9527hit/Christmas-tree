@@ -238,9 +238,6 @@
             
             <!-- Music Control -->
             <div style="margin-top: 10px; display: flex; justify-content: flex-end; gap: 10px;">
-                <button id="mic-btn" class="upload-btn" style="min-width: 40px; width: 40px; padding: 10px; justify-content: center;">
-                    🎤
-                </button>
                 <button id="music-btn" class="upload-btn" style="min-width: 40px; width: 40px; padding: 10px; justify-content: center;">
                     ♪
                 </button>
@@ -266,7 +263,7 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'; 
-        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+        import { FilesetResolver, HandLandmarker, FaceLandmarker } from '@mediapipe/tasks-vision';
 
         // --- 核心配置 ---
         // Adjusted brightness settings
@@ -309,8 +306,7 @@
         let clock = new THREE.Clock();
         let particleSystem = []; 
         let photoMeshGroup = new THREE.Group();
-        let handLandmarker, video;
-        let audioContext, analyser, microphone, dataArray;
+        let handLandmarker, faceLandmarker, video;
         const debugInfo = document.getElementById('debug-info');
 
         async function init() {
@@ -818,6 +814,8 @@
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
             );
+            
+            // Initialize Hand Landmarker
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
@@ -825,6 +823,16 @@
                 },
                 runningMode: "VIDEO",
                 numHands: 1
+            });
+
+            // Initialize Face Landmarker
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: `https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task`,
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO",
+                numFaces: 1
             });
             
             if (navigator.mediaDevices?.getUserMedia) {
@@ -958,49 +966,48 @@
                     }).catch(() => {});
                 }
             }, { once: true });
-
-            // Mic Button
-            const micBtn = document.getElementById('mic-btn');
-            micBtn.addEventListener('click', () => {
-                setupAudioDetection();
-                micBtn.style.background = '#ff99cc';
-                micBtn.style.color = '#000';
-            });
-        }
-
-        function setupAudioDetection() {
-            if (audioContext) return;
-            
-            navigator.mediaDevices.getUserMedia({ audio: true })
-            .then(stream => {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioContext.createAnalyser();
-                microphone = audioContext.createMediaStreamSource(stream);
-                microphone.connect(analyser);
-                analyser.fftSize = 256;
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-                console.log("Microphone connected");
-            })
-            .catch(err => {
-                console.error("Mic Error:", err);
-                alert("Microphone access denied. Cannot blow out candle!");
-            });
         }
 
         function checkBlow() {
-            if (!analyser || STATE.candleBlown) return;
+            if (!faceLandmarker || !video || video.readyState < 2 || STATE.candleBlown) return;
+
+            const results = faceLandmarker.detectForVideo(video, performance.now());
             
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            // Check lower frequencies for "blow" sound
-            for(let i = 0; i < dataArray.length / 2; i++) {
-                sum += dataArray[i];
-            }
-            const average = sum / (dataArray.length / 2);
-            
-            // Threshold for blowing
-            if (average > 50) { 
-                blowOutCandle();
+            if (results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const lm = results.faceLandmarks[0];
+                
+                // Key Landmarks
+                // 61: Mouth Left, 291: Mouth Right
+                // 13: Upper Lip, 14: Lower Lip
+                // 234: Face Left, 454: Face Right
+
+                const mouthLeft = lm[61];
+                const mouthRight = lm[291];
+                const upperLip = lm[13];
+                const lowerLip = lm[14];
+                const faceLeft = lm[234];
+                const faceRight = lm[454];
+
+                // Calculate distances
+                const mouthWidth = Math.hypot(mouthLeft.x - mouthRight.x, mouthLeft.y - mouthRight.y);
+                const mouthHeight = Math.hypot(upperLip.x - lowerLip.x, upperLip.y - lowerLip.y);
+                const faceWidth = Math.hypot(faceLeft.x - faceRight.x, faceLeft.y - faceRight.y);
+
+                // Metrics
+                const widthRatio = mouthWidth / faceWidth; // Small when puckered
+                const openRatio = mouthHeight / mouthWidth; // Large when round/open
+
+                // Debug
+                // debugInfo.innerText = `W-Ratio: ${widthRatio.toFixed(2)} | Open: ${openRatio.toFixed(2)}`;
+
+                // Thresholds for "Blowing" (Puckered lips + slightly open)
+                // Normal mouth width ratio is ~0.4 - 0.5
+                // Puckered is usually < 0.35
+                // Open ratio > 0.3 means it's not just closed lips
+                
+                if (widthRatio < 0.38 && openRatio > 0.3) {
+                    blowOutCandle();
+                }
             }
         }
 
