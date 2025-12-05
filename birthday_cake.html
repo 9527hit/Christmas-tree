@@ -247,7 +247,9 @@
         };
 
         const STATE = {
-            mode: 'CAKE', // Changed from TREE to CAKE
+            mode: 'CAKE', 
+            lastMode: 'SCATTER',
+            transitionStartTime: 0,
             focusIndex: -1, 
             focusTarget: null,
             hand: { detected: false, x: 0, y: 0 },
@@ -277,6 +279,8 @@
             loader.style.opacity = 0;
             setTimeout(() => loader.remove(), 800);
 
+            // Start initial animation
+            STATE.transitionStartTime = clock.getElapsedTime();
             animate();
         }
 
@@ -398,6 +402,12 @@
                 );
 
                 this.calculatePositions();
+                
+                // Calculate sort value for animation (0.0 to 1.0 based on height)
+                // Cake height is roughly -6 to +6
+                this.sortValue = (this.posCake.y + 6) / 12;
+                if (this.sortValue < 0) this.sortValue = 0;
+                if (this.sortValue > 1) this.sortValue = 1;
             }
 
             calculatePositions() {
@@ -453,8 +463,25 @@
             update(dt, mode, focusTargetMesh) {
                 let target = this.posCake;
                 
-                if (mode === 'SCATTER') target = this.posScatter;
-                else if (mode === 'FOCUS') {
+                // Animation Logic
+                const timeSinceTransition = clock.getElapsedTime() - STATE.transitionStartTime;
+                const buildDuration = 2.0; // 2 seconds to build
+                
+                if (mode === 'SCATTER') {
+                    target = this.posScatter;
+                } else if (mode === 'CAKE') {
+                    // Layered build-up animation
+                    const progress = timeSinceTransition / buildDuration;
+                    // Add a small buffer so bottom starts immediately but top waits
+                    const activationThreshold = this.sortValue * 0.8; 
+                    
+                    if (progress < activationThreshold) {
+                        // If not yet activated, stay in scatter position (or float slightly)
+                        target = this.posScatter;
+                    } else {
+                        target = this.posCake;
+                    }
+                } else if (mode === 'FOCUS') {
                     if (this.mesh === focusTargetMesh) {
                         const desiredWorldPos = new THREE.Vector3(0, 2, 30);
                         const invMatrix = new THREE.Matrix4().copy(mainGroup.matrixWorld).invert();
@@ -464,7 +491,7 @@
                     }
                 }
 
-                const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 2.0; 
+                const lerpSpeed = (mode === 'FOCUS' && this.mesh === focusTargetMesh) ? 5.0 : 3.0; 
                 this.mesh.position.lerp(target, lerpSpeed * dt);
 
                 if (mode === 'SCATTER') {
@@ -745,21 +772,29 @@
 
                 debugInfo.innerText = `Size: ${handSize.toFixed(2)} | Ext: ${extensionRatio.toFixed(2)} | Pinch: ${pinchRatio.toFixed(2)} | Mode: ${STATE.mode}`;
 
+                let newMode = STATE.mode;
+
                 if (extensionRatio < 1.5) {
                     // Fist -> Cake
-                    STATE.mode = 'CAKE';
+                    newMode = 'CAKE';
                     STATE.focusTarget = null;
                 } else if (pinchRatio < 0.35) {
                     // Pinch -> Focus
                     if (STATE.mode !== 'FOCUS') {
-                        STATE.mode = 'FOCUS';
+                        newMode = 'FOCUS';
                         const photos = particleSystem.filter(p => p.type === 'PHOTO');
                         if (photos.length) STATE.focusTarget = photos[Math.floor(Math.random()*photos.length)].mesh;
                     }
                 } else if (extensionRatio > 1.7) {
                     // Open Hand -> Scatter
-                    STATE.mode = 'SCATTER';
+                    newMode = 'SCATTER';
                     STATE.focusTarget = null;
+                }
+
+                if (newMode !== STATE.mode) {
+                    STATE.lastMode = STATE.mode;
+                    STATE.mode = newMode;
+                    STATE.transitionStartTime = clock.getElapsedTime();
                 }
             } else {
                 STATE.hand.detected = false;
