@@ -237,12 +237,7 @@
             preload: {
                 autoScanLocal: true,
                 scanCount: 200, 
-                images: [
-                    'https://images.unsplash.com/photo-1530103862676-de3c9a59af38?q=80&w=600', 
-                    'https://images.unsplash.com/photo-1558636508-e0db3814bd1d?q=80&w=600',
-                    'https://images.unsplash.com/photo-1566737236500-c8ac43014a67?q=80&w=600', 
-                    'https://images.unsplash.com/photo-1464349153912-bc6163bd8917?q=80&w=600'
-                ]
+                images: [] // Removed network images
             }
         };
 
@@ -288,14 +283,8 @@
         function loadPredefinedImages() {
             const loader = new THREE.TextureLoader();
             
-            // 1. 加载网络预设图片
-            CONFIG.preload.images.forEach(url => {
-                loader.load(url, 
-                    (t) => { t.colorSpace = THREE.SRGBColorSpace; addPhotoToScene(t); },
-                    undefined,
-                    (e) => { console.log(`Skipped: ${url}`); }
-                );
-            });
+            // 1. (已移除) 网络预设图片
+            // CONFIG.preload.images.forEach(...)
 
             // 2. 加载本地 "照片" 文件夹中的具体文件
             const localPhotos = [
